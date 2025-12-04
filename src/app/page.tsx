@@ -9,6 +9,7 @@ interface VideoData {
   author: string;
   thumbnailUrl: string;
   transcript: string;
+  duration?: number;
 }
 
 interface GeneratedImage {
@@ -18,6 +19,8 @@ interface GeneratedImage {
   height: number;
 }
 
+type ImageSource = "thumbnail" | "frame" | "ai";
+
 export default function Home() {
   const [url, setUrl] = useState("");
   const [videoData, setVideoData] = useState<VideoData | null>(null);
@@ -25,13 +28,18 @@ export default function Home() {
   const [style, setStyle] = useState("modern and professional");
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [extractingFrame, setExtractingFrame] = useState(false);
   const [error, setError] = useState("");
+  const [imageSource, setImageSource] = useState<ImageSource>("thumbnail");
+  const [timestamp, setTimestamp] = useState("0:00");
+  const [framePreview, setFramePreview] = useState<string | null>(null);
 
   const fetchVideoData = async () => {
     setLoading(true);
     setError("");
     setVideoData(null);
     setGeneratedImage(null);
+    setFramePreview(null);
 
     try {
       const response = await fetch("/api/youtube", {
@@ -54,6 +62,36 @@ export default function Home() {
     }
   };
 
+  const extractFrame = async () => {
+    if (!videoData) return;
+
+    setExtractingFrame(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/frame", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoId: videoData.videoId,
+          timestamp,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to extract frame");
+      }
+
+      setFramePreview(data.frameData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setExtractingFrame(false);
+    }
+  };
+
   const generateImage = async () => {
     if (!videoData) return;
 
@@ -61,6 +99,12 @@ export default function Home() {
     setError("");
 
     try {
+      const sourceImage = imageSource === "frame" && framePreview
+        ? framePreview
+        : imageSource === "thumbnail"
+          ? videoData.thumbnailUrl
+          : null;
+
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -68,6 +112,8 @@ export default function Home() {
           title: videoData.title,
           transcript: videoData.transcript,
           style,
+          sourceImage,
+          mode: imageSource === "ai" ? "generate" : "enhance",
         }),
       });
 
@@ -179,11 +225,106 @@ export default function Home() {
           </div>
         )}
 
+        {/* Image Source Selection */}
+        {videoData && (
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 mb-6">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+              Image Source
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+              <button
+                onClick={() => setImageSource("thumbnail")}
+                className={`p-4 rounded-lg border-2 transition-all text-left ${
+                  imageSource === "thumbnail"
+                    ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
+                    : "border-slate-200 dark:border-slate-600 hover:border-slate-300"
+                }`}
+              >
+                <div className="font-medium text-slate-900 dark:text-white mb-1">
+                  YouTube Thumbnail
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-400">
+                  Enhance the existing video thumbnail
+                </div>
+              </button>
+              <button
+                onClick={() => setImageSource("frame")}
+                className={`p-4 rounded-lg border-2 transition-all text-left ${
+                  imageSource === "frame"
+                    ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
+                    : "border-slate-200 dark:border-slate-600 hover:border-slate-300"
+                }`}
+              >
+                <div className="font-medium text-slate-900 dark:text-white mb-1">
+                  Video Frame
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-400">
+                  Extract and enhance a specific frame
+                </div>
+              </button>
+              <button
+                onClick={() => setImageSource("ai")}
+                className={`p-4 rounded-lg border-2 transition-all text-left ${
+                  imageSource === "ai"
+                    ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
+                    : "border-slate-200 dark:border-slate-600 hover:border-slate-300"
+                }`}
+              >
+                <div className="font-medium text-slate-900 dark:text-white mb-1">
+                  AI Generated
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-400">
+                  Create entirely new image from content
+                </div>
+              </button>
+            </div>
+
+            {/* Frame Extraction Options */}
+            {imageSource === "frame" && (
+              <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Timestamp (MM:SS or HH:MM:SS)
+                </label>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={timestamp}
+                    onChange={(e) => setTimestamp(e.target.value)}
+                    placeholder="0:30"
+                    className="flex-1 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                  />
+                  <button
+                    onClick={extractFrame}
+                    disabled={extractingFrame}
+                    className="px-4 py-2 bg-slate-600 hover:bg-slate-700 disabled:bg-slate-400 text-white font-medium rounded-lg transition-colors"
+                  >
+                    {extractingFrame ? "Extracting..." : "Extract Frame"}
+                  </button>
+                </div>
+                {framePreview && (
+                  <div className="mt-4">
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">Frame Preview:</p>
+                    <div className="relative w-full max-w-md aspect-video rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700">
+                      <Image
+                        src={framePreview}
+                        alt="Extracted frame"
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Style Selection & Generate */}
         {videoData && (
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 mb-6">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-              Image Style
+              {imageSource === "ai" ? "Image Style" : "Enhancement Style"}
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               {[
@@ -214,7 +355,7 @@ export default function Home() {
             />
             <button
               onClick={generateImage}
-              disabled={generating}
+              disabled={generating || (imageSource === "frame" && !framePreview)}
               className="w-full px-6 py-4 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold rounded-lg transition-all text-lg"
             >
               {generating ? (
@@ -235,10 +376,10 @@ export default function Home() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  Generating Image...
+                  {imageSource === "ai" ? "Generating Image..." : "Enhancing Image..."}
                 </span>
               ) : (
-                "Generate Featured Image"
+                imageSource === "ai" ? "Generate Featured Image" : "Enhance & Create Thumbnail"
               )}
             </button>
           </div>
