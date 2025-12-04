@@ -35,7 +35,7 @@ Requirements:
 
     // Generate image using Gemini 2.5 Flash Image model
     const response = await client.models.generateContent({
-      model: "gemini-2.5-flash-preview-image-generation",
+      model: "gemini-2.5-flash-image",
       contents: [{ parts: [{ text: imagePrompt }] }],
       config: {
         responseModalities: ["TEXT", "IMAGE"],
