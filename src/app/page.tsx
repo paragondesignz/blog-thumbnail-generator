@@ -95,15 +95,44 @@ export default function Home() {
     }
   };
 
-  const downloadImage = () => {
+  const downloadImage = async (format: "png" | "webp" = "webp") => {
     if (!generatedImage) return;
 
-    const link = document.createElement("a");
-    link.href = generatedImage.imageData;
-    link.download = `shopify-blog-thumbnail-${Date.now()}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (format === "webp") {
+      // Convert to WebP at 75% quality using canvas
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = generatedImage.width;
+        canvas.height = generatedImage.height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const webpData = canvas.toDataURL("image/webp", 0.75);
+
+        const link = document.createElement("a");
+        link.href = webpData;
+        link.download = `shopify-blog-thumbnail-${Date.now()}.webp`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
+
+      img.src = generatedImage.imageData;
+    } else {
+      // Download as PNG
+      const link = document.createElement("a");
+      link.href = generatedImage.imageData;
+      link.download = `shopify-blog-thumbnail-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   return (
@@ -320,13 +349,21 @@ export default function Home() {
                 <strong>Prompt used:</strong> {generatedImage.imagePrompt}
               </p>
             </div>
-            <div className="flex gap-3">
-              <button
-                onClick={downloadImage}
-                className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
-              >
-                Download Image
-              </button>
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => downloadImage("webp")}
+                  className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+                >
+                  Download WebP (75%)
+                </button>
+                <button
+                  onClick={() => downloadImage("png")}
+                  className="px-6 py-3 bg-slate-600 hover:bg-slate-700 text-white font-medium rounded-lg transition-colors"
+                >
+                  Download PNG
+                </button>
+              </div>
               <button
                 onClick={generateImage}
                 disabled={generating}
